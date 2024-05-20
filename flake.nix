@@ -4,7 +4,7 @@
   inputs = {
     nixpkgs.follows = "khaser/nixpkgs";
     flake-utils.url = "github:numtide/flake-utils";
-    khaser.url = "git+ssh://git@109.124.253.149/~git/nixos-config?ref=master";
+    khaser.url = "github:khaser/nix-vim-config";
   };
 
   outputs = { self, nixpkgs, khaser, flake-utils }:
@@ -37,13 +37,13 @@
         proxy-node-img = import (nixpkgs + "/nixos/lib/make-disk-image.nix") {
           inherit pkgs;
           lib = pkgs.lib;
-          config = self.packages.${system}.nixosConfigurations.proxy-node.config;
+          config = self.packages.${system}.nixosConfigurations.default.config;
           diskSize = 8192;
           format = "qcow2";
           configFile = ./configuration.nix;
         };
 
-        nixosConfigurations.proxy-node = nixpkgs.lib.nixosSystem {
+        nixosConfigurations.default = nixpkgs.lib.nixosSystem {
           system = "x86_64-linux";
           modules = [
             ./configuration.nix

@@ -8,7 +8,7 @@ parser.add_argument('--db_ip', nargs=1, required=True)
 def main():
     args = parser.parse_args(argv[1:])
 
-    try
+    try:
         db_ip = args.db_ip[0]
     except:
         print("Db ip is undefined")
