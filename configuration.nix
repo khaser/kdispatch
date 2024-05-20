@@ -19,7 +19,13 @@ in
 
   environment.systemPackages = with pkgs; [
     vim
+    git
+    tmux
   ];
+
+  nix.settings = {
+    experimental-features = [ "nix-command" "flakes" ];
+  };
 
   users.groups.anon = {};
   users.users = {

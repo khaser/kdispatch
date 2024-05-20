@@ -37,26 +37,26 @@
         proxy-node-img = import (nixpkgs + "/nixos/lib/make-disk-image.nix") {
           inherit pkgs;
           lib = pkgs.lib;
-          config = self.nixosConfigurations.${system}.proxy-node.config;
+          config = self.packages.${system}.nixosConfigurations.proxy-node.config;
           diskSize = 8192;
           format = "qcow2";
           configFile = ./configuration.nix;
         };
 
-      };
+        nixosConfigurations.proxy-node = nixpkgs.lib.nixosSystem {
+          system = "x86_64-linux";
+          modules = [
+            ./configuration.nix
+            (nixpkgs + "/nixos/modules/profiles/qemu-guest.nix")
+            {
+              systemd.services.kdispatch-server = {
+                  wantedBy = [ "multi-user.target" ];
+                  serviceConfig.ExecStart = "${self.packages.${system}.kdispatch-server}/bin/kdispatch-server --db_ip '10.0.0.1'";
+              };
+            }
+          ];
+        };
 
-      nixosConfigurations.proxy-node = nixpkgs.lib.nixosSystem {
-        inherit system;
-        modules = [
-          ./configuration.nix
-          (nixpkgs + "/nixos/modules/profiles/qemu-guest.nix")
-          {
-            systemd.services.kdispatch-server = {
-                wantedBy = [ "multi-user.target" ];
-                serviceConfig.ExecStart = "${self.packages.${system}.kdispatch-server}/bin/kdispatch-server --db_ip '10.0.0.1'";
-            };
-          }
-        ];
       };
 
       devShell =
