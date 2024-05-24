@@ -26,6 +26,8 @@
           flask
           ydb
           ydb-sqlalchemy
+          paramiko # python ssh implementation
+          python-daemon
         ];
 
       pkgFabric = (name:

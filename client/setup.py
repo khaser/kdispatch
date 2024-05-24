@@ -8,7 +8,7 @@ setup(
         license='MIT',
         author='Andrey Khorokhorin',
         author_email='a-horohorin@mail.com',
-        install_requires=['requests'],
+        install_requires=['requests', 'paramiko', 'daemon'],
         entry_points={
             'console_scripts': [
                 'kdispatch-client=client:main'
