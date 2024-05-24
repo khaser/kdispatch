@@ -15,31 +15,36 @@
         extraPlugins = with pkgs.vimPlugins; [ ];
       });
       python3 = pkgs.python311;
-    in
-    {
-      packages = {
-        kdispatch-server =
+      pythonPkgs =
+        let
+          ydb = (pkgs.callPackage ./ydb.nix { inherit python3; });
+          ydb-sqlalchemy = (pkgs.callPackage ./ydb-sqlalchemy.nix { inherit python3 ydb; });
+        in with python3.pkgs; [
+          setuptools
+          requests
+          flask
+          ydb
+          ydb-sqlalchemy
+        ];
+
+      pkgFabric = (name:
           python3.pkgs.buildPythonPackage rec {
-            pname = "kdispatch-server";
+            pname = "kdispatch-${name}";
             version = "0.1.0";
             format = "setuptools";
 
-            src = ./server;
+            src = ./${name};
 
-            propagatedBuildInputs = let
-              ydb = (pkgs.callPackage ./ydb.nix { inherit python3; });
-              ydb-sqlalchemy = (pkgs.callPackage ./ydb-sqlalchemy.nix { inherit python3 ydb; });
-            in with python3.pkgs; [
-              setuptools
-              requests
-              flask
-              # flask-sqlalchemy
-              ydb
-              ydb-sqlalchemy
-            ];
+            propagatedBuildInputs = pythonPkgs;
+          }
+      );
 
-            doCheck = false;
-          };
+    in
+    {
+      packages = {
+        kdispatch-server = pkgFabric "server";
+        kdispatch-client = pkgFabric "client";
+
 
         proxy-node-img = import (nixpkgs + "/nixos/lib/make-disk-image.nix") {
           inherit pkgs;
@@ -73,7 +78,7 @@
         pkgs.mkShell {
           buildInputs = [
             configured-vim
-            python3
+            (python3.withPackages (python-pkgs: pythonPkgs))
           ];
         };
     });

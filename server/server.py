@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 import argparse
+import secrets
 from sys import argv
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, abort
 # from flask_sqlalchemy import SQLAlchemy
 import sqlalchemy as sa
 import sqlalchemy.orm as orm
@@ -25,18 +26,17 @@ db_engine = sa.create_engine("yql+ydb://ydb.serverless.yandexcloud.net:2135/ru-c
 
 app = Flask(__name__)
 
-class Admins(Base):
+class Admin(Base):
     __tablename__ = 'admins'
 
     handle = sa.Column(sa.String(64), primary_key=True)
-    token = sa.Column(sa.String(64))
+    token = sa.Column(sa.String(64), nullable=False)
 
 class Project(Base):
     __tablename__ = 'projects'
-    proj_id = sa.Column(sa.Integer, primary_key=True, autoincrement=True)
     token = sa.Column(sa.String(64), nullable=False)
-    admin_handle = sa.Column(sa.String(64), nullable=False, index=True)
-    proj_handle = sa.Column(sa.String(64), nullable=False)
+    handle = sa.Column(sa.String(64), nullable=False, index=True, primary_key=True)
+    name = sa.Column(sa.String(64), nullable=False, primary_key=True)
     def __repr__(self):
         return '<Project %r(%r-%r)>' % (self.proj_id, self.proj_handle, self.admin_handle)
 
@@ -44,28 +44,55 @@ class Host(Base):
     __tablename__ = 'hosts'
     port = sa.Column(sa.Integer, primary_key=True)
     token = sa.Column(sa.String(64), nullable=False)
-    proj_id = sa.Column(sa.Integer, nullable=False, index=True)
+    proj_token = sa.Column(sa.String(64), nullable=False)
     def __repr__(self):
         return '<Host on port %r for project %r>' % (self.port, self.proj_id)
 
-def generate_token():
-    return "todo: token"
+def generate_token(pref):
+    return f"{pref}_{secrets.token_urlsafe(16)}"
 
-@app.route('/api/1.0/admin', methods=['POST'])
-def create_admin():
-    if not request.json or not 'handle' in request.json:
+@app.route('/api/admin/register/', methods=['GET'])
+def register_admin():
+    if not 'handle' in request.args:
         abort(400)
     with db_engine.connect() as conn:
-        conn.execute(sa.text("""
-                             INSERT INTO admins (handle, token) VALUES ({}, {})
-                             """.format(request.json['handle'], generate_token())))
+        handle = request.args['handle']
+        rs = conn.execute(sa.text(f"""SELECT admins.handle, admins.token
+                                      FROM admins WHERE admins.handle = '{handle}'""")).fetchall()
+        print(rs)
+        if len(rs) != 0:
+            abort(406)
+        # success, create user
+        token = generate_token("adm")
+        conn.execute(sa.text(f"INSERT INTO admins (handle, token) VALUES ('{handle}', '{token}')"))
+        return token, 200
 
-    return "OK", 200
+@app.route('/api/service/register', methods=['POST'])
+def register_service():
+    if not request.json \
+        or not 'name' in request.json \
+        or not 'admin_token' in request.json:
+        abort(400)
+    with db_engine.connect() as conn:
+        name = request.json['name']
+        admin_token = request.json['admin_token']
+        rs = conn.execute(sa.text(f"""SELECT admins.handle
+                                      FROM admins WHERE admins.token = '{admin_token}'""")).fetchall()
+        if len(rs) == 0:
+            abort(403)
+        elif len(rs) > 1:
+            abort(500)
+        else:
+            handle = rs[0][0]
+            token = generate_token("prj")
+            try:
+                conn.execute(sa.text(f"INSERT INTO projects (token, handle, name) \
+                                       VALUES ('{token}', '{handle}', '{name}')"))
+            except:
+                abort(406)
+            return token, 200
 
-@app.route('/api/1.0/admin', methods=['GET'])
-def get_admin():
-    res = [] # [{ "handle": x.handle, "token": x.token } for x in Admin.query.all()]
-    return jsonify(res), 200
+
 
 parser = argparse.ArgumentParser(prog="kserver-dispatch")
 parser.add_argument('--db_ip', nargs=1, required=True)
