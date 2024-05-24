@@ -33,7 +33,7 @@
               setuptools
               requests
               flask
-              flask-sqlalchemy
+              # flask-sqlalchemy
               ydb
               ydb-sqlalchemy
             ];
