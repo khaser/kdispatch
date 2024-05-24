@@ -26,9 +26,16 @@
 
             src = ./server;
 
-            propagatedBuildInputs = with python3.pkgs; [
+            propagatedBuildInputs = let
+              ydb = (pkgs.callPackage ./ydb.nix { inherit python3; });
+              ydb-sqlalchemy = (pkgs.callPackage ./ydb-sqlalchemy.nix { inherit python3 ydb; });
+            in with python3.pkgs; [
               setuptools
               requests
+              flask
+              flask-sqlalchemy
+              ydb
+              ydb-sqlalchemy
             ];
 
             doCheck = false;
@@ -50,8 +57,11 @@
             (nixpkgs + "/nixos/modules/profiles/qemu-guest.nix")
             {
               systemd.services.kdispatch-server = {
-                  wantedBy = [ "multi-user.target" ];
-                  serviceConfig.ExecStart = "${self.packages.${system}.kdispatch-server}/bin/kdispatch-server --db_ip '10.0.0.1'";
+                environment = {
+                  USE_METADATA_CREDENTIALS = "1";
+                };
+                wantedBy = [ "multi-user.target" ];
+                serviceConfig.ExecStart = "${self.packages.${system}.kdispatch-server}/bin/kdispatch-server --db_ip '10.0.0.1'";
               };
             }
           ];
