@@ -8,7 +8,7 @@ setup(
         license='MIT',
         author='Andrey Khorokhorin',
         author_email='a-horohorin@mail.com',
-        install_requires=['requests', 'flask', 'flask-sqlalchemy', 'ydb', 'ydb-sqlalchemy'],
+        install_requires=['requests', 'flask', 'ydb', 'ydb-sqlalchemy'],
         entry_points={
             'console_scripts': [
                 'kdispatch-server=server:main'

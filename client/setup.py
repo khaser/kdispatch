@@ -2,7 +2,7 @@
 from setuptools import setup
 
 setup(
-        name='kdispatch-clinet',
+        name='kdispatch-client',
         version='0.1.0',
         packages=['.'],
         license='MIT',

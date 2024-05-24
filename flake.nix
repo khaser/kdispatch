@@ -20,6 +20,7 @@
           ydb = (pkgs.callPackage ./ydb.nix { inherit python3; });
           ydb-sqlalchemy = (pkgs.callPackage ./ydb-sqlalchemy.nix { inherit python3 ydb; });
         in with python3.pkgs; [
+          pip
           setuptools
           requests
           flask

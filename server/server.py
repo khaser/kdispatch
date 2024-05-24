@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-import argparse
 import secrets
+import socket
 from sys import argv
 from flask import Flask, jsonify, request, abort
 # from flask_sqlalchemy import SQLAlchemy
@@ -14,6 +14,7 @@ basedir = os.path.abspath(os.path.dirname(__file__))
 
 Base = orm.declarative_base()
 
+# TODO: take db-ip from environment
 driver = ydb.Driver(
   endpoint='grpcs://ydb.serverless.yandexcloud.net:2135',
   database='/ru-central1/b1gq3fjp39rvbfkapjns/etnr359bpbdiq83sm41h',
@@ -61,11 +62,12 @@ def register_admin():
                                       FROM admins WHERE admins.handle = '{handle}'""")).fetchall()
         print(rs)
         if len(rs) != 0:
-            abort(406)
+            abort(409)
         # success, create user
         token = generate_token("adm")
         conn.execute(sa.text(f"INSERT INTO admins (handle, token) VALUES ('{handle}', '{token}')"))
         return token, 200
+
 
 @app.route('/api/service/register', methods=['POST'])
 def register_service():
@@ -89,28 +91,46 @@ def register_service():
                 conn.execute(sa.text(f"INSERT INTO projects (token, handle, name) \
                                        VALUES ('{token}', '{handle}', '{name}')"))
             except:
-                abort(406)
+                abort(409)
             return token, 200
 
 
+@app.route('/api/service/hosts', methods=['POST'])
+def register_host():
+    if not request.json \
+        or not 'service_token' in request.json:
+        abort(400)
+    with db_engine.connect() as conn:
+        proj_token = request.json['service_token']
+        rs = conn.execute(sa.text(f"""SELECT handle
+                                      FROM projects WHERE token = '{proj_token}'""")).fetchall()
+        if len(rs) == 0:
+            abort(403)
+        elif len(rs) > 1:
+            abort(500)
+        else:
+            # we have single service with provided token
+            host_token = generate_token("hst")
+            port = allocate_port()
+            try:
+                conn.execute(sa.text(f"INSERT INTO hosts (port, token, proj_token) \
+                                       VALUES ({port}, '{host_token}', '{proj_token}')"))
+            except:
+                abort(409)
+            return jsonify({'token': host_token, 'port': port}), 200
 
-parser = argparse.ArgumentParser(prog="kserver-dispatch")
-parser.add_argument('--db_ip', nargs=1, required=True)
+def allocate_port():
+    tcp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    tcp.bind(('', 0))
+    addr, port = tcp.getsockname()
+    tcp.close()
+    return int(port)
+
 
 def main():
     with db_engine.connect() as conn:
         Base.metadata.drop_all(conn.engine)
         Base.metadata.create_all(conn.engine)
-
-    args = parser.parse_args(argv[1:])
-
-    try:
-        db_ip = args.db_ip[0]
-    except:
-        print("Db ip is undefined")
-        return 0
-
-    print("Using database ip is:", db_ip)
 
     app.run(host='0.0.0.0', port=8080, debug=True)
 
