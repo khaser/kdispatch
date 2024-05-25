@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import secrets
 import socket
+import random
 from sys import argv
 from flask import Flask, jsonify, request, abort
 # from flask_sqlalchemy import SQLAlchemy
@@ -111,6 +112,7 @@ def register_host():
                                    VALUES ({port}, '{host_token}', '{proj_token}')"))
             return jsonify({'token': host_token, 'port': port}), 200
 
+
 @app.route('/api/service/hosts', methods=['DELETE'])
 def deregister_host():
     if not request.json \
@@ -127,6 +129,28 @@ def deregister_host():
         else:
             conn.execute(sa.text(f"DELETE FROM hosts WHERE token = '{host_token}'"))
             return "OK",200
+
+
+@app.route('/api/service/hosts', methods=['GET'])
+def connect_client():
+    if not 'handle' in request.args \
+        or not 'name' in request.args:
+        abort(400)
+    with db_engine.connect() as conn:
+        handle = request.args['handle']
+        name = request.args['name']
+        rs = conn.execute(sa.text(f"""SELECT token
+                                      FROM projects WHERE handle = '{handle}' and name = '{name}'""")).fetchall()
+        if len(rs) == 0:
+            abort(404) # no such service
+        elif len(rs) > 1:
+            abort(500)
+
+        proj_token = rs[0][0]
+        rs = conn.execute(sa.text(f"""SELECT port
+                                      FROM hosts WHERE proj_token = '{proj_token}'""")).fetchall()
+        return jsonify([i[0] for i in rs]), 200
+
 
 def allocate_port():
     tcp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
