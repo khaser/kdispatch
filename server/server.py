@@ -29,7 +29,6 @@ app = Flask(__name__)
 
 class Admin(Base):
     __tablename__ = 'admins'
-
     handle = sa.Column(sa.String(64), primary_key=True)
     token = sa.Column(sa.String(64), nullable=False)
 
@@ -38,16 +37,12 @@ class Project(Base):
     token = sa.Column(sa.String(64), nullable=False)
     handle = sa.Column(sa.String(64), nullable=False, index=True, primary_key=True)
     name = sa.Column(sa.String(64), nullable=False, primary_key=True)
-    def __repr__(self):
-        return '<Project %r(%r-%r)>' % (self.proj_id, self.proj_handle, self.admin_handle)
 
 class Host(Base):
     __tablename__ = 'hosts'
     port = sa.Column(sa.Integer, primary_key=True)
     token = sa.Column(sa.String(64), nullable=False)
     proj_token = sa.Column(sa.String(64), nullable=False)
-    def __repr__(self):
-        return '<Host on port %r for project %r>' % (self.port, self.proj_id)
 
 def generate_token(pref):
     return f"{pref}_{secrets.token_urlsafe(16)}"
@@ -112,12 +107,26 @@ def register_host():
             # we have single service with provided token
             host_token = generate_token("hst")
             port = allocate_port()
-            try:
-                conn.execute(sa.text(f"INSERT INTO hosts (port, token, proj_token) \
-                                       VALUES ({port}, '{host_token}', '{proj_token}')"))
-            except:
-                abort(409)
+            conn.execute(sa.text(f"INSERT INTO hosts (port, token, proj_token) \
+                                   VALUES ({port}, '{host_token}', '{proj_token}')"))
             return jsonify({'token': host_token, 'port': port}), 200
+
+@app.route('/api/service/hosts', methods=['DELETE'])
+def deregister_host():
+    if not request.json \
+        or not 'host_token' in request.json:
+        abort(400)
+    with db_engine.connect() as conn:
+        host_token = request.json['host_token']
+        rs = conn.execute(sa.text(f"""SELECT port, token, proj_token
+                                      FROM hosts WHERE token = '{host_token}'""")).fetchall()
+        if len(rs) == 0:
+            abort(403)
+        elif len(rs) > 1:
+            abort(500)
+        else:
+            conn.execute(sa.text(f"DELETE FROM hosts WHERE token = '{host_token}'"))
+            return "OK",200
 
 def allocate_port():
     tcp = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
