@@ -147,8 +147,6 @@ def main():
             print(token)
             print(hint)
 
-    print(args)
-
     try:
         if args.list:
             if not args.service:
@@ -168,7 +166,11 @@ def main():
                 exit (1)
             remote_port = int(random.choice(service_ports))
             print(remote_port)
-            local_tunnel(args.port, remote_port)
+            if args.detach:
+                with daemon.DaemonContext():
+                    local_tunnel(args.port, remote_port)
+            else:
+                local_tunnel(args.port, remote_port)
         elif args.start_hosting:
             if not args.token:
                 print("Specify you admin token to be able manage projects")
