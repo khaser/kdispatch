@@ -3,9 +3,11 @@ import argparse
 import threading
 import select
 import socket
-import daemon
+import tempfile
+
 from sys import argv
 
+import daemon
 import requests
 import paramiko
 
@@ -22,7 +24,8 @@ parser = argparse.ArgumentParser(prog="kdispatch")
 
 parser.add_argument('--token', '-t', help="access token")
 parser.add_argument('--quiet', '-q', action='store_true', help="prevent hints, may be usable for scripting")
-parser.add_argument('--port', '-p', help="local port for project sharing (if you are host) or receiving (if you are client)")
+parser.add_argument('--port', '-p', type=int, help="local port for project sharing (if you are host) or receiving (if you are client)")
+parser.add_argument('--detach', action='store_true', help="detach application from console after `--start-hosting`")
 
 action_group = parser.add_mutually_exclusive_group(required=True)
 
@@ -32,7 +35,6 @@ action_group.add_argument('--disconnect', '-d', action='store_true', help="stop 
 
 # hoster
 action_group.add_argument('--start-hosting', action='store_true', help="start share project hosted on local `port`")
-action_group.add_argument('--stop-hosting', action='store_true', help="stop project sharing")
 
 # admin
 action_group.add_argument('--sign-up', '-s', dest='handle', help="sign-up as administrator to get token allows project operations")
@@ -40,14 +42,11 @@ action_group.add_argument('--sign-up', '-s', dest='handle', help="sign-up as adm
 action_group.add_argument('--register-project', '-r', dest='proj_name', help="register new service with `proj-name`")
 action_group.add_argument('--delete-project', action='store_true', help="remove service")
 
-# host_group = parser.add_argument_group('Hoster options')
-# client_group = parser.add_argument_group('Client options')
-
-def spawn_tunnel(host_ip, local_port, remote_port):
+def spawn_tunnel(local_port, remote_port):
 
     client = paramiko.SSHClient()
     client.set_missing_host_key_policy(paramiko.client.AutoAddPolicy)
-    client.connect(host_ip, 22, "anon", password="")
+    client.connect(HOST_IP, 22, "anon", password="")
 
     transport = client.get_transport()
     transport.request_port_forward("", remote_port)
@@ -56,21 +55,27 @@ def spawn_tunnel(host_ip, local_port, remote_port):
         if chan is None:
             continue
         print("Connect request registred")
+        sock = try_connect("127.0.0.1", local_port)
+        if sock is None:
+            deregister_hosting()
+            return
         thr = threading.Thread(
-            target=resend_routine, args=(chan, "127.0.0.1", local_port)
+            target=resend_routine, args=(chan, sock)
         )
         thr.daemon = True
         thr.start()
 
 
-def resend_routine(chan, host, port):
+def try_connect(host, port):
     sock = socket.socket()
     try:
         sock.connect((host, port))
     except Exception as e:
-        print("Forwarding request to %s:%d failed: %r" % (host, port, e))
-        return
+        print("Connecting to %s:%d failed: %r" % (host, port, e))
+        return None
+    return sock
 
+def resend_routine(chan, sock, checkOnly=False):
     print("Connected!  Tunnel open {} -> {} -> {}".format(chan.origin_addr, chan.getpeername(), (host, port)))
 
     while True:
@@ -88,6 +93,10 @@ def resend_routine(chan, host, port):
     chan.close()
     sock.close()
     print("Tunnel closed from %r" % (chan.origin_addr,))
+
+
+def deregister_hosting():
+    print("TODO: deregister")
 
 
 def main():
@@ -116,10 +125,24 @@ def main():
         r = requests.post(f'{REST_URL}/service/hosts', json={'service_token': args.token})
         if r.status_code == 200:
             remote_port, host_token = r.json().values()
-            print_with_hint(host_token, "Above you can see you host token, which you should use to deactivite your hosting")
+            remote_port = int(remote_port)
+
+            sock = try_connect("127.0.0.1", args.port)
+            if not sock:
+                print(f"Failed to connect to local port, check that you provide application on port {args.port}")
+                deregister_hosting()
+                exit(1)
+            else:
+                sock.close()
+
+            print_with_hint(host_token, "Hosting will be stopped automatically when specified service port is closed")
+
             print(f"DEBUG: local_port {args.port}, remote_port {remote_port}")
-            with daemon.DaemonContext():
-                spawn_tunnel(HOST_IP, int(args.port), int(remote_port))
+            if args.detach:
+                with daemon.DaemonContext():
+                    spawn_tunnel(args.port, remote_port)
+            else:
+                spawn_tunnel(args.port, remote_port)
             exit(0)
         elif r.status_code == 409:
             print(f"User with handle `{args.handle}` alredy exists. Please, try different handle")
