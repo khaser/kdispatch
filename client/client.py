@@ -15,7 +15,8 @@ import paramiko
 
 
 HOST_IP = '130.193.38.230'
-REST_URL = f'http://{HOST_IP}:8080/api'
+# REST_URL = f'http://{HOST_IP}:8080/api'
+REST_URL = 'https://d5da4ikf778qvb6k83as.apigw.yandexcloud.net/api'
 
 parser = argparse.ArgumentParser(prog="kdispatch")
 # mode_group = parser.add_mutually_exclusive_group(required=True)
